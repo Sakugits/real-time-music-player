@@ -9,11 +9,10 @@
 // COMMENT THIS LINE TO EXECUTE WITH THE PC
 #define TEST_MODE 1
 
-#define PC 2
 #define SAMPLE_TIME 250 
 #define SOUND_PIN  11
 #define BUTTON_PIN 10
-#define LED_PIN 9
+#define LED_PIN 8
 #define BUF_SIZE 256
 
 /**********************************************************
@@ -21,10 +20,10 @@
  *********************************************************/
 unsigned char buffer[BUF_SIZE];
 unsigned long timeOrig;
+bool current_state = false;
+bool previous_state = false;
 bool muted = false;
-bool flag = false;
 
-int SC = 0;
 
 /**********************************************************
  * Function: play_bit
@@ -56,8 +55,12 @@ void play_bit()
  *********************************************************/
 void mute_check()
 {
- muted = digitalRead(BUTTON_PIN);
- digitalWrite(LED_PIN, muted);
+ current_state = digitalRead(BUTTON_PIN);
+ if (current_state==LOW && previous_state==HIGH) {
+  muted = !muted;
+  digitalWrite(LED_PIN, muted);
+ }
+ previous_state = current_state;
 }
 
 /**********************************************************
@@ -91,28 +94,14 @@ void setup ()
  *********************************************************/
 void loop ()
 {
-    /*unsigned long timeDiff;
-
     mute_check();
-    mute_display();
-    play_bit();
+    
+    /*unsigned long timeDiff;
     timeDiff = SAMPLE_TIME - (micros() - timeOrig);
     timeOrig = timeOrig + SAMPLE_TIME;
     delayMicroseconds(timeDiff);*/
-    if (flag) {
-      flag = false;
-      switch (SC) {
-        case 0:
-          mute_check();
-          break;
-        case 1:
-          play_bit();
-          break;
-      }
-      SC = (SC+1)%PC;
-    }
 }
 
 ISR(TIMER2_COMPB_vect) {
-  flag = true;
+  play_bit();
 }
