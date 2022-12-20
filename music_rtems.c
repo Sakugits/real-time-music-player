@@ -26,9 +26,16 @@
 #define DEV_NAME "/dev/com1"
 #define FILE_NAME "/let_it_be_1bit.raw"
 
-#define PERIOD_TASK_SEC    0            /* Period of Task */
-#define PERIOD_TASK_NSEC  512000000    /* Period of Task */
-#define SEND_SIZE 256                /* BYTES */
+#define PERIOD_TASK_DISPLAY_STATUS_SEC   5     /* Secoonds of Task DISPLAY STATUS Period*/
+#define PERIOD_TASK_DISPLAY_STATUS_NSEC   0    /* Nano Seconds of Task DISPLAY STATUS Period*/
+
+#define PERIOD_TASK_RECIVE_STATUS_SEC   2      /* Secoonds of Task DISPLAY STATUS Period*/
+#define PERIOD_TASK_RECIVE_STATUS_NSEC   0     /* Nano Seconds of Task DISPLAY STATUS Period*/
+
+#define PERIOD_TASK_READ_SEND_SEC  0                /* Seconds of Task SEND Period*/
+#define PERIOD_TASK_READ_SEND_NSEC  512000000       /* Nano Seconds of Task SEND Period*/
+
+#define SEND_SIZE 256                          /* BYTES */
 
 #define TARFILE_START _binary_tarfile_start
 #define TARFILE_SIZE _binary_tarfile_size
@@ -40,6 +47,27 @@
  *********************************************************/
 extern int _binary_tarfile_start;
 extern int _binary_tarfile_size;
+
+// Variable to store te current state (Reproducing or paused)
+int pauseReproductionState = 0;
+
+// Priorities for each task
+struct sched_param displayStatusPriority = {
+    sched_priority:3
+};
+struct sched_param reciveStatusPriority = {
+    sched_priority:2
+};
+struct sched_param showStatePriority = {
+    sched_priority:1
+};
+
+/**********************************************************
+ *  MUTEX
+ *********************************************************/
+
+pthread_mutex_t mutex;
+pthread_mutexattr_t mutexattr;
 
 /**********************************************************
  * Function: diffTime
@@ -142,7 +170,9 @@ rtems_task Init (rtems_task_argument ignored)
     cycle.tv_nsec=PERIOD_TASK_NSEC;
 
     clock_gettime(CLOCK_REALTIME,&start);
+
     while (1) {
+
         // read from music file
         ret=read(fd_file,buf,SEND_SIZE);
         if (ret < 0) {
@@ -160,10 +190,12 @@ rtems_task Init (rtems_task_argument ignored)
         // get end time, calculate lapso and sleep
         clock_gettime(CLOCK_REALTIME,&end);
         diffTime(end,start,&diff);
+        
         if (0 >= compTime(cycle,diff)) {
             printf("ERROR: lasted long than the cycle\n");
             exit(-1);
         }
+
         diffTime(cycle,diff,&diff);
         nanosleep(&diff,NULL);
         addTime(start,cycle,&start);
