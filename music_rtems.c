@@ -21,15 +21,15 @@
 /**********************************************************
  *  CONSTANTS
  *********************************************************/
-#define NSEC_PER_SEC 1000000000UL
+#define NSEC_PER_SEC 1000000000UL //nanoseconds in a second
 
-#define DEV_NAME "/dev/com1"
+#define DEV_NAME "/dev/com1" //Arduino comms by default
 #define FILE_NAME "/let_it_be_1bit.raw"
 
-#define PERIOD_TASK_DISPLAY_STATUS_SEC   5     /* Secoonds of Task DISPLAY STATUS Period*/
+#define PERIOD_TASK_DISPLAY_STATUS_SEC   5     /* Seconds of Task DISPLAY STATUS Period*/
 #define PERIOD_TASK_DISPLAY_STATUS_NSEC   0    /* Nano Seconds of Task DISPLAY STATUS Period*/
 
-#define PERIOD_TASK_RECEIVE_STATUS_SEC   2      /* Secoonds of Task DISPLAY STATUS Period*/
+#define PERIOD_TASK_RECEIVE_STATUS_SEC   2      /* Seconds of Task DISPLAY STATUS Period*/
 #define PERIOD_TASK_RECEIVE_STATUS_NSEC   0     /* Nano Seconds of Task DISPLAY STATUS Period*/
 
 #define PERIOD_TASK_READ_SEND_SEC  0                /* Seconds of Task SEND Period*/
@@ -63,17 +63,17 @@ struct sched_param readSendPriority = {
 };
 
 // Threads Definition
-pthread_t  readSend, displayStatus, receiveStatus;
+pthread_t  readSendThread, displayStatusThread, receiveStatusThread;
 
 // Attributes for each thread
-pthread_attr_t readSendAttr, displayStatusAttr, receiveStatusAttr;
+pthread_attr_t readSendAttributes, displayStatusAttributes, receiveStatusAttributes;
 
 /**********************************************************
  *  MUTEX
  *********************************************************/
 
 pthread_mutex_t mutex;
-pthread_mutexattr_t mutexattr;
+pthread_mutexattr_t mutexattributes;
 
 /**********************************************************
  * Function: diffTime
@@ -135,11 +135,11 @@ void * display_status(void *param) {
     // Variables for time
     struct timespec start,end,diff,cycle;
 
-    // Copy values of cycle duraation
+    // Copy values of cycle duration
     cycle.tv_sec=PERIOD_TASK_DISPLAY_STATUS_SEC;
     cycle.tv_nsec=PERIOD_TASK_DISPLAY_STATUS_NSEC;
 
-    // Getstart time
+    // Get start time
     clock_gettime(CLOCK_REALTIME,&start);
 
     while (1) {
@@ -149,23 +149,25 @@ void * display_status(void *param) {
         if(pauseReproductionState == 1){
 
             pthread_mutex_unlock(&mutex);
-            printf("Reproduction paused\n");
+            printf("Music Stopped...\n");
 
         } 
         else{
 
             pthread_mutex_unlock(&mutex);
-            printf("Reproduction resumed\n");
+            printf("Playing Music...\n");
 
         }
 
         // Get end time, calculate lapso and sleep
         clock_gettime(CLOCK_REALTIME,&end);
         diffTime(end,start,&diff);
+
         if (0 >= compTime(cycle,diff)) {
-            printf("ERROR: lasted long than the cycle\n");
+            printf("ERROR: time limit surpassed in display_status\n");
             exit(-1);
         }
+
         diffTime(cycle,diff,&diff);
         nanosleep(&diff,NULL);
         addTime(start,cycle,&start);
@@ -178,7 +180,7 @@ void * display_status(void *param) {
 void * receive_status(void *param) {
 
     //Aux variable for input control
-    char keyboardInput = '1'
+    char keyboardInput = '1';
 
     // Variables for time
     struct timespec start,end,diff,cycle;
@@ -187,7 +189,7 @@ void * receive_status(void *param) {
     cycle.tv_sec=PERIOD_TASK_RECEIVE_STATUS_SEC;
     cycle.tv_nsec=PERIOD_TASK_RECEIVE_STATUS_NSEC;
 
-    // Getstart time
+    // Get start time
     clock_gettime(CLOCK_REALTIME,&start);
 
     while (1) {
@@ -208,20 +210,19 @@ void * receive_status(void *param) {
             pthread_mutex_unlock(&mutex);
 
         }
-        else{
-            printf("ERROR: INPUT ERROR, INCORRECT INPUT\n");
-        }
 
         // Get state from input
         while(0 >= scanf("%c", &keyboardInput));
-
         // Get end time, calculate lapso and sleep
         clock_gettime(CLOCK_REALTIME,&end);
         diffTime(end,start,&diff);
+        diff.tv_sec = diff.tv_sec % PERIOD_TASK_RECEIVE_STATUS_SEC;
+
         if (0 >= compTime(cycle,diff)) {
-            printf("ERROR: lasted long than the cycle\n");
+            printf("ERROR: time limit surpassed in receive_status\n");
             exit(-1);
         }
+
         diffTime(cycle,diff,&diff);
         nanosleep(&diff,NULL);
         addTime(start,cycle,&start);
@@ -240,18 +241,13 @@ void * read_send(void *param) {
     int fd_serie = -1;
     int ret = 0;
 
-    printf("Populating Root file system from TAR file.\n");
-    Untar_FromMemory((unsigned char *)(&TARFILE_START),
-                     (unsigned long)&TARFILE_SIZE);
-
-    rtems_shell_init("SHLL", RTEMS_MINIMUM_STACK_SIZE * 4,
-                     100, "/dev/foobar", false, true, NULL);
 
     /* Open serial port */
     printf("open serial device %s \n",DEV_NAME);
     fd_serie = open (DEV_NAME, O_RDWR);
+
     if (fd_serie < 0) {
-        printf("open: error opening serial %s\n", DEV_NAME);
+        printf("ERROR in open: error opening serial %s\n", DEV_NAME);
         exit(-1);
     }
 
@@ -268,34 +264,37 @@ void * read_send(void *param) {
     printf("open file %s begin\n",FILE_NAME);
     fd_file = open (FILE_NAME, O_RDWR);
     if (fd_file < 0) {
-        perror("open: error opening file \n");
+        perror("ERROR in open: error opening file \n");
         exit(-1);
     }
 
-    // Copy values of cycle duraation
-    cycle.tv_sec=PERIOD_TASK_READ_SEND_SEC
+    // Copy values of cycle duration
+    cycle.tv_sec=PERIOD_TASK_READ_SEND_SEC;
     cycle.tv_nsec=PERIOD_TASK_READ_SEND_NSEC;
 
-    // Getstart time
+    // Get start time
     clock_gettime(CLOCK_REALTIME,&start);
 
     while (1) {
 
         pthread_mutex_lock(&mutex);
 
-        if (pauseReproductionState== 1){
+        if (pauseReproductionState== 1) { //Music stopped
 
             pthread_mutex_unlock(&mutex);
             memset(buf, 0, SEND_SIZE);
             ret=write(fd_serie,buf,SEND_SIZE);
 
-        } else {
+        } 
+        
+        else { //Music playing
 
             pthread_mutex_unlock(&mutex);
             // Read from music file
             ret=read(fd_file,buf,SEND_SIZE);
+            
             if (ret < 0) {
-                printf("read: error reading file\n");
+                printf("ERROR in read: error reading file\n");
                 exit(-1);
             }
 
@@ -306,7 +305,7 @@ void * read_send(void *param) {
 
         // Checking if any error while writing
         if (ret < 0) {
-            printf("write: error writing serial\n");
+            printf("ERROR in write: error writing serial\n");
             exit(-1);
         }
 
@@ -314,7 +313,7 @@ void * read_send(void *param) {
         clock_gettime(CLOCK_REALTIME,&end);
         diffTime(end,start,&diff);
         if (0 >= compTime(cycle,diff)) {
-            printf("ERROR: lasted long than the cycle\n");
+            printf("ERROR: time limit surpassed in read_send\n");
             exit(-1);
         }
         diffTime(cycle,diff,&diff);
@@ -328,11 +327,6 @@ void * read_send(void *param) {
  *****************************************************************************/
 rtems_task Init (rtems_task_argument ignored)
 {
-    struct timespec start,end,diff,cycle;
-    unsigned char buf[SEND_SIZE];
-    int fd_file = -1;
-    int fd_serie = -1;
-    int ret = 0;
 
     printf("Populating Root file system from TAR file.\n");
     Untar_FromMemory((unsigned char *)(&TARFILE_START),
@@ -341,42 +335,42 @@ rtems_task Init (rtems_task_argument ignored)
     rtems_shell_init("SHLL", RTEMS_MINIMUM_STACK_SIZE * 4,
                      100, "/dev/foobar", false, true, NULL);
 
-     // Mutex configuration
-   pthread_mutexattr_init(&mutexattr);
-   pthread_mutexattr_setprotocol(&mutexattr, PTHREAD_PRIO_PROTECT);
-   pthread_mutexattr_setprioceiling(&mutexattr, 3);
-   pthread_mutex_init(&mutex, &mutexattr);
+    // Mutex configuration for syncronizing pauseReproductionState
+    pthread_mutexattr_init(&mutexattributes);
+    pthread_mutexattr_setprotocol(&mutexattributes, PTHREAD_PRIO_PROTECT);
+    pthread_mutexattr_setprioceiling(&mutexattributes, 3);
+    pthread_mutex_init(&mutex, &mutexattributes);
 
-	//THREAD 1 (for task display_status)
-	pthread_attr_init(&displayStatusAttr);
-	pthread_attr_setinheritsched(&displayStatusAttr, PTHREAD_EXPLICIT_SCHED);
-	pthread_attr_setschedpolicy(&displayStatusAttr, SCHED_FIFO);
-	pthread_attr_setschedparam(&displayStatusAttr, &displayStatusPriority);
-	pthread_create(&display_status, &displayStatusAttr, displayStatus, NULL);
-	
+    //THREAD 1 (for task read_send)
+    pthread_attr_init(&readSendAttributes);
+    pthread_attr_setinheritsched(&readSendAttributes, PTHREAD_EXPLICIT_SCHED);
+    pthread_attr_setschedpolicy(&readSendAttributes, SCHED_FIFO);
+    pthread_attr_setschedparam(&readSendAttributes, &readSendPriority);
+    pthread_create(&readSendThread, &readSendAttributes, &read_send, NULL);
 
     //THREAD 2 (for task receive_status)
-    pthread_attr_init(&receiveStatusAttr);
-	pthread_attr_setinheritsched(&receiveStatusAttr, PTHREAD_EXPLICIT_SCHED);
-	pthread_attr_setschedpolicy(&receiveStatusAttr, SCHED_FIFO);
-	pthread_attr_setschedparam(&receiveStatusAttr, &receiveStatusPriority);
-	pthread_create(&receive_status, &receiveStatusAttr, receiveStatus, NULL);
+    pthread_attr_init(&receiveStatusAttributes);
+    pthread_attr_setinheritsched(&receiveStatusAttributes, PTHREAD_EXPLICIT_SCHED);
+    pthread_attr_setschedpolicy(&receiveStatusAttributes, SCHED_FIFO);
+    pthread_attr_setschedparam(&receiveStatusAttributes, &receiveStatusPriority);
+    pthread_create(&receiveStatusThread, &receiveStatusAttributes, &receive_status, NULL);
 
-    //THREAD 3 (for task read_send)
-    pthread_attr_init(&readSendAttr);
-	pthread_attr_setinheritsched(&readSendAttr, PTHREAD_EXPLICIT_SCHED);
-	pthread_attr_setschedpolicy(&readSendAttr, SCHED_FIFO);
-	pthread_attr_setschedparam(&readSendAttr, &readSendPriority);
-	pthread_create(&read_send, &readSendAttr, readSend, NULL);
+    //THREAD 3 (for task display_status)
+    pthread_attr_init(&displayStatusAttributes);
+    pthread_attr_setinheritsched(&displayStatusAttributes, PTHREAD_EXPLICIT_SCHED);
+    pthread_attr_setschedpolicy(&displayStatusAttributes, SCHED_FIFO);
+    pthread_attr_setschedparam(&displayStatusAttributes, &displayStatusPriority);
+    pthread_create(&displayStatusThread, &displayStatusAttributes, &display_status,  NULL);
+
 
     // Ending and destroying the threads and attributes
-    pthread_join(displayStatus, NULL);
-    pthread_join(receiveStatus, NULL);
-    pthread_join(readSend, NULL);
+    pthread_join(displayStatusThread, NULL);
+    pthread_join(receiveStatusThread, NULL);
+    pthread_join(readSendThread, NULL);
     
-    pthread_attr_destroy(&displayStatusAttr);
-    pthread_attr_destroy(&receiveStatusAttr);
-    pthread_attr_destroy(&displayStatusAttr);
+    pthread_attr_destroy(&displayStatusAttributes);
+    pthread_attr_destroy(&receiveStatusAttributes);
+    pthread_attr_destroy(&displayStatusAttributes);
 
     // Destroying the mutex
     pthread_mutex_destroy(&mutex);
