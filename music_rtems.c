@@ -159,19 +159,7 @@ void * display_status(void *param) {
 
         }
 
-        // Get end time, calculate lapso and sleep
-        clock_gettime(CLOCK_REALTIME,&end);
-        diffTime(end,start,&diff);
-
-        if (0 >= compTime(cycle,diff)) {
-            printf("ERROR: time limit surpassed in display_status\n");
-            exit(-1);
-        }
-
-        diffTime(cycle,diff,&diff);
-        nanosleep(&diff,NULL);
-        addTime(start,cycle,&start);
-    }
+        
 }
 
 /**********************************************************
@@ -211,22 +199,19 @@ void * receive_status(void *param) {
 
         }
 
-        // Get state from input
-        while(0 >= scanf("%c", &keyboardInput));
         // Get end time, calculate lapso and sleep
         clock_gettime(CLOCK_REALTIME,&end);
         diffTime(end,start,&diff);
-        diff.tv_sec = diff.tv_sec % PERIOD_TASK_RECEIVE_STATUS_SEC;
 
         if (0 >= compTime(cycle,diff)) {
-            printf("ERROR: time limit surpassed in receive_status\n");
+            printf("ERROR: time limit surpassed in display_status\n");
             exit(-1);
         }
 
         diffTime(cycle,diff,&diff);
         nanosleep(&diff,NULL);
         addTime(start,cycle,&start);
-    }    
+    }
 }
 /**********************************************************
  *  Function: read_send
