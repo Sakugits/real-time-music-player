@@ -1,18 +1,18 @@
 /**********************************************************
  *  INCLUDES
  *********************************************************/
-#include "let_it_be_1bit.h"
+//#include "let_it_be_1bit.h"
 
 /**********************************************************
  *  CONSTANTS
  *********************************************************/
 // COMMENT THIS LINE TO EXECUTE WITH THE PC
-#define TEST_MODE 1
+//#define TEST_MODE 1
 
 #define SAMPLE_TIME 250 
-#define SOUND_PIN  11
-#define BUTTON_PIN 10
-#define LED_PIN 8
+#define SOUND_PIN  11 //Speaker
+#define BUTTON_PIN 10 //Mute Button
+#define LED_PIN 8 //Display LED
 #define BUF_SIZE 256
 
 /**********************************************************
@@ -34,8 +34,8 @@ void play_bit()
   static unsigned char data = 0;
   static int music_count = 0;
 
-    bitwise = (bitwise * 2);
-    if (bitwise > 128) {
+    bitwise = (bitwise * 2); //shift mask to the left
+    if (bitwise > 128) { //new byte
        bitwise = 1;
        #ifdef TEST_MODE 
           data = pgm_read_byte_near(music + music_count);
@@ -47,7 +47,7 @@ void play_bit()
        #endif
     }
     if (!muted)
-      {digitalWrite(SOUND_PIN, (data & bitwise));}
+      {digitalWrite(SOUND_PIN, (data & bitwise));} //play only the bit marked by the mask
 }
 
 /**********************************************************
@@ -83,10 +83,8 @@ void setup ()
   TIMSK2 &= B11111000;    //Disables the interrupts from timer2
   OCR2B = 125;            //Set compare register B to this value
   TCNT2 = 0;              //Set the timer2 count to 0
-  // Setup Serial Monitor
   TIMSK2 |= B00000100; //enable compB interrupts from timer2
 
-  //timeOrig = micros();    
 }
 
 /**********************************************************
@@ -95,11 +93,6 @@ void setup ()
 void loop ()
 {
     mute_check();
-    
-    /*unsigned long timeDiff;
-    timeDiff = SAMPLE_TIME - (micros() - timeOrig);
-    timeOrig = timeOrig + SAMPLE_TIME;
-    delayMicroseconds(timeDiff);*/
 }
 
 ISR(TIMER2_COMPB_vect) {
