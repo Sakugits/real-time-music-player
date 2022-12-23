@@ -36,6 +36,7 @@
 #define PERIOD_TASK_READ_SEND_NSEC  512000000       /* Nano Seconds of Task SEND Period*/
 
 #define SEND_SIZE 256                          /* BYTES */
+#define BYTE_SIZE 8
 
 #define TARFILE_START _binary_tarfile_start
 #define TARFILE_SIZE _binary_tarfile_size
@@ -290,16 +291,18 @@ void * read_send(void *param) {
         else { //Music playing
 
             pthread_mutex_unlock(&mutex);
-            // Read from music file
-            ret=read(fd_file,buf,SEND_SIZE);
-            
-            if (ret < 0) {
-                printf("ERROR in read: error reading file\n");
-                exit(-1);
-            }
 
-            // Write on the serial/I2C port
-            ret=write(fd_serie,buf,SEND_SIZE);
+            for (int i=0; i<=SEND_SIZE/BYTE_SIZE;i++) {
+				ret=read(fd_file,buf,BYTE_SIZE);
+
+				if (ret < 0) {
+					printf("ERROR in read: error reading file\n");
+					exit(-1);
+				}
+
+				// Write on the serial/I2C port
+				ret=write(fd_serie,buf,BYTE_SIZE);
+            }
 
         }
 
